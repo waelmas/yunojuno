@@ -33,3 +33,13 @@ VISITOR_SESSION_EXPIRY: Optional[int] = _setting("VISITOR_SESSION_EXPIRY", 0)
 # is stashed in the session the visitor will remain a visitor until the session
 # expires. This value is used by the VisitorRequestMiddleware.
 VISITOR_TOKEN_EXPIRY: int = _setting("VISITOR_TOKEN_EXPIRY", 300)
+
+
+
+# Value used to set the default maximum number of visits allowed for a visitor pass
+# if no specific value is provided. This value is used by the VisitorRequestMiddleware.
+DEFAULT_MAX_VISITS: int = _setting("DEFAULT_MAX_VISITS", 10)
+
+
+# If set to True, then reactivating a token/pass also resets the visits count
+REACTIVATE_RESETS_VISTIS: bool = _setting("REACTIVATE_RESETS_VISTIS", False)

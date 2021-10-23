@@ -1,6 +1,8 @@
 from __future__ import annotations
+from datetime import time
 
 import json
+from logging import Logger
 from typing import Optional
 
 from django.contrib import admin, messages
@@ -8,7 +10,14 @@ from django.db.models.query import QuerySet
 from django.http.request import HttpRequest
 from django.utils.safestring import mark_safe
 
+
 from .models import Visitor, VisitorLog
+
+
+
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 def pretty_print(data: Optional[dict]) -> str:
@@ -55,7 +64,10 @@ class VisitorsAdmin(admin.ModelAdmin):
         "expires_at",
         "is_active",
         "_is_valid",
+        "visits_count",
+        "max_visits"
     )
+
     readonly_fields = (
         "uuid",
         "created_at",
@@ -63,6 +75,7 @@ class VisitorsAdmin(admin.ModelAdmin):
         "_context",
         "is_active",
         "expires_at",
+        "visits_count",
     )
     search_fields = (
         "first_name",
@@ -82,6 +95,12 @@ class VisitorsAdmin(admin.ModelAdmin):
 
     _context.short_description = "Context (prettified)"  # type: ignore
 
+    # Overriding this method to allow the max_visits field to be editable only on create
+    def get_readonly_fields(self, request, obj=None):
+        if obj: # editing an existing object
+            return self.readonly_fields + ('max_visits',)
+        return self.readonly_fields
+
 
 @admin.register(VisitorLog)
 class VisitorLogAdmin(admin.ModelAdmin):
@@ -95,3 +114,4 @@ class VisitorLogAdmin(admin.ModelAdmin):
     )
     readonly_fields = [f.name for f in VisitorLog._meta.fields]
     pass
+

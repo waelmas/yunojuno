@@ -11,12 +11,14 @@ from django.http.request import HttpRequest
 from django.utils.timezone import now as tz_now
 from django.utils.translation import gettext_lazy as _lazy
 
-from .settings import VISITOR_QUERYSTRING_KEY, VISITOR_TOKEN_EXPIRY
+from .settings import VISITOR_QUERYSTRING_KEY, VISITOR_TOKEN_EXPIRY, DEFAULT_MAX_VISITS, REACTIVATE_RESETS_VISTIS
 
 
 class InvalidVisitorPass(Exception):
     pass
 
+class MaximumVisitsExceeded(Exception):
+    pass
 
 class Visitor(models.Model):
     """A temporary visitor (betwixt anonymous and authenticated)."""
@@ -51,6 +53,12 @@ class Visitor(models.Model):
             "Set to False to disable the visitor link and prevent further access."
         ),
     )
+    visits_count = models.IntegerField(default=0)
+    if last_updated_at > created_at:
+        max_visits = models.IntegerField(default=DEFAULT_MAX_VISITS)
+    else:
+        max_visits = models.IntegerField(default=DEFAULT_MAX_VISITS, editable=False)
+    
 
     class Meta:
         verbose_name = "Visitor pass"
@@ -88,7 +96,8 @@ class Visitor(models.Model):
     @property
     def is_valid(self) -> bool:
         """Return True if the token is active and not yet expired."""
-        return self.is_active and not self.has_expired
+        # Added check for number of visits vs max visits allowed.
+        return self.is_active and not self.has_expired and (self.visits_count < self.max_visits)
 
     def validate(self) -> None:
         """Raise InvalidVisitorPass if inactive or expired."""
@@ -96,6 +105,19 @@ class Visitor(models.Model):
             raise InvalidVisitorPass("Visitor pass is inactive")
         if self.has_expired:
             raise InvalidVisitorPass("Visitor pass has expired")
+    
+    def register_visit(self) -> None:
+        """ Increase the count of visits for the specific pass 
+        
+        If the number of visits is < to the max number or visits, then register a new visit
+        otherwise, throw MaximumVisitsExceeded (keep in mind visits start from 1)
+        we could change the logic to always reset the count upon reactivation
+        """
+
+        if self.visits_count >= self.max_visits:
+            raise MaximumVisitsExceeded("Maximum allowed visits exceeded") 
+        self.visits_count =  self.visits_count + 1
+        self.save()
 
     def serialize(self) -> dict:
         """
@@ -112,6 +134,8 @@ class Visitor(models.Model):
             "email": self.email,
             "scope": self.scope,
             "context": self.context,
+            "max_visits": self.max_visits,
+            "visits_count": self.visits_count,
         }
 
     def tokenise(self, url: str) -> str:
@@ -132,6 +156,10 @@ class Visitor(models.Model):
         """Reactivate the token so it can be reused."""
         self.is_active = True
         self.expires_at = tz_now() + self.DEFAULT_TOKEN_EXPIRY
+        # adding resetting of the visits_count in order for the pass/token to be reused
+        # if REACTIVATE_RESETS_VISTIS in settings is set to True
+        if REACTIVATE_RESETS_VISTIS:
+            self.visits_count = 0
         self.save()
 
 
@@ -140,6 +168,7 @@ class VisitorLogManager(models.Manager):
         """Extract values from HttpRequest and store locally."""
         return self.create(
             visitor=request.visitor,
+            visits = request.visitor.visits_count,
             session_key=request.session.session_key or "",
             http_method=request.method,
             request_uri=request.path,
@@ -163,6 +192,7 @@ class VisitorLog(models.Model):
     """Log visitors."""
 
     visitor = models.ForeignKey(Visitor, related_name="visits", on_delete=CASCADE)
+    visits = models.IntegerField(default=0)
     session_key = models.CharField(blank=True, max_length=40)
     http_method = models.CharField(max_length=10)
     request_uri = models.URLField()

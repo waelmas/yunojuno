@@ -45,6 +45,8 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 ("last_updated_at", models.DateTimeField(auto_now=True)),
+                ("max_visits", models.IntegerField()),
+                ("visits_count", models.IntegerField(auto_created=True, default=0, editable=False)),
             ],
             options={
                 "verbose_name": "Visitor pass",
