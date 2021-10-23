@@ -4,12 +4,12 @@ import logging
 from typing import Callable
 
 from django.conf import settings
-from django.core.exceptions import MiddlewareNotUsed
+from django.core.exceptions import MiddlewareNotUsed, PermissionDenied
 from django.http.request import HttpRequest
 from django.http.response import HttpResponse
 
 from . import session
-from .models import InvalidVisitorPass, Visitor
+from .models import InvalidVisitorPass, Visitor, MaximumVisitsExceeded
 from .settings import VISITOR_QUERYSTRING_KEY
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,14 @@ class VisitorRequestMiddleware:
         else:
             request.visitor = visitor
             request.user.is_visitor = True
+            # register_visit() also checks if visits are still allowed. If exceeded it throws
+            # MaximumVisitsExceeded and returns a 403 page to the user
+            try:
+                visitor.register_visit()
+            except MaximumVisitsExceeded as e:
+                logger.debug("Max number of visits exceeded: %s", e)
+                raise PermissionDenied("Max visits exceeded.")
+                
         return self.get_response(request)
 
 

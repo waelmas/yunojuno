@@ -2,9 +2,11 @@ import datetime
 import uuid
 
 import pytest
-from django.utils.timezone import now as tz_now
+from django.utils.timezone import is_naive, now as tz_now
 
-from visitors.models import InvalidVisitorPass, Visitor
+from visitors.models import InvalidVisitorPass, Visitor, MaximumVisitsExceeded
+
+from visitors.settings import DEFAULT_MAX_VISITS, REACTIVATE_RESETS_VISTIS
 
 TEST_UUID: str = "68201321-9dd2-4fb3-92b1-24367f38a7d6"
 
@@ -12,6 +14,7 @@ TODAY: datetime.datetime = tz_now()
 ONE_DAY: datetime.timedelta = datetime.timedelta(days=1)
 TOMORROW: datetime.datetime = TODAY + ONE_DAY
 YESTERDAY: datetime.datetime = TODAY - ONE_DAY
+
 
 
 @pytest.mark.parametrize(
@@ -41,17 +44,53 @@ def test_reactivate():
     visitor = Visitor.objects.create(
         email="foo@bar.com", is_active=False, expires_at=YESTERDAY
     )
-    assert not visitor.is_active
-    assert visitor.has_expired
-    assert not visitor.is_valid
-    visitor.reactivate()
-    assert visitor.is_active
-    assert not visitor.has_expired
-    assert visitor.is_valid
-    visitor.refresh_from_db()
-    assert visitor.is_active
-    assert not visitor.has_expired
-    assert visitor.is_valid
+    # If REACTIVATE_RESETS_VISTIS == True, then visits_count is resetting which means token
+    # becomes valid again with reactivate. Otherwise, the token remains invalid
+    if REACTIVATE_RESETS_VISTIS:
+        assert not visitor.is_active
+        assert visitor.has_expired
+        assert not visitor.is_valid
+        visitor.reactivate()
+        assert visitor.is_active
+        assert not visitor.has_expired
+        assert visitor.is_valid
+        visitor.refresh_from_db()
+        assert visitor.is_active
+        assert not visitor.has_expired
+        assert visitor.is_valid
+    else:
+        assert not visitor.is_active
+        assert visitor.has_expired
+        visitor.reactivate()
+        assert visitor.is_active
+        assert not visitor.has_expired
+        visitor.refresh_from_db()
+        assert visitor.is_active
+        assert not visitor.has_expired
+
+
+@pytest.mark.parametrize(
+    "visits_count,max_visits",
+    (
+        (0,10),
+        (5, 5),
+        (6,5),
+        (-1, 6),
+        (4,5)
+    ),
+)
+@pytest.mark.django_db
+def test_visits_limit(visits_count, max_visits):
+    visitor = Visitor.objects.create(
+        email="foo@bar.com", is_active=True, expires_at=TOMORROW, visits_count=visits_count, max_visits=max_visits
+    )
+    if visitor.is_valid:
+        visitor.register_visit()
+        return
+    with pytest.raises(MaximumVisitsExceeded):
+        visitor.register_visit()
+
+
 
 
 @pytest.mark.parametrize(

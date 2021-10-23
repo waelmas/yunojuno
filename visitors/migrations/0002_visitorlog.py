@@ -40,6 +40,7 @@ class Migration(migrations.Migration):
                         to="visitors.visitor",
                     ),
                 ),
+                ("visits", models.IntegerField(default=0)),
             ],
         ),
     ]
