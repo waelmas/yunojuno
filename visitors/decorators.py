@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import logging
 from typing import Any, Callable, Optional
 
 from django.conf import settings
@@ -11,7 +10,6 @@ from django.utils.translation import gettext as _
 
 from .models import VisitorLog
 
-logger = logging.getLogger(__name__)
 
 # universal scope - essentially unscoped access
 SCOPE_ANY = "*"

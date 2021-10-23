@@ -2,7 +2,6 @@ from __future__ import annotations
 from datetime import time
 
 import json
-from logging import Logger
 from typing import Optional
 
 from django.contrib import admin, messages
@@ -13,11 +12,6 @@ from django.utils.safestring import mark_safe
 
 from .models import Visitor, VisitorLog
 
-
-
-
-import logging
-logger = logging.getLogger(__name__)
 
 
 def pretty_print(data: Optional[dict]) -> str:
